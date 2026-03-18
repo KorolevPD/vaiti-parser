@@ -1,0 +1,68 @@
+[project]
+name = "vaiti-parser"
+version = "0.1.0"
+description = "Парсер данных о зарплате, вакансиях и рейтинге компаний."
+authors = [
+    {name = "Pavel Korolev", email = "pdkorolev@yandex.ru"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx (>=0.28.1,<0.29.0)",
+    "tenacity (>=9.1.4,<10.0.0)",
+    "pyyaml (>=6.0.3,<7.0.0)",
+    "sqlalchemy (>=2.0.48,<3.0.0)",
+    "alembic (>=1.18.4,<2.0.0)",
+    "sqlmodel (>=0.0.37,<0.0.38)",
+    "pydantic (>=2.4.1,<2.12)",
+    "pydantic-settings (>=2.12.0,<3.0.0)",
+]
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.0.1,<10.0.0)",
+    "pytest-asyncio (>=1.3.0,<2.0.0)",
+    "black (>=25.11.0,<26.0.0)",
+    "isort (>=7.0.0,<8.0.0)",
+    "mypy (>=1.18.2,<2.0.0)",
+    "flake8 (>=7.3.0,<8.0.0)",
+    "types-pyyaml (>=6.0.12.20250915,<7.0.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = false
+
+[tool.flake8]
+max-line-length = 80
+extend-ignore = ["E203", "W503"]
+
+[tool.black]
+line-length = 79
+target-version = ['py311']
+preview = true
+
+[tool.isort]
+profile = "wemake"
+line_length = 79
+combine_as_imports = true
+force_sort_within_sections = true
+known_third_party = ["alembic"]
+
+[tool.mypy]
+strict = true
+explicit_package_bases = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-ra -sv --tb=short"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning"
+]
+asyncio_mode = "auto"
