@@ -29,7 +29,7 @@ class AvitoVacanciesParser(BaseParser):
         config_path: str = "configs/avito_vacancies.yaml",
         **kwargs: object,
     ) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)  # type: ignore
         self._config_path = Path(config_path)
 
     async def parse_once(self) -> None:
@@ -208,7 +208,10 @@ class AvitoVacanciesParser(BaseParser):
         vacancy_id = str(data["id"])
         title = str(data["title"])
         description = str(data.get("description", ""))
-        published_at = int(data.get("sortTimeStamp") or 0)
+        raw_timestamp = data.get("sortTimeStamp")
+        published_at = (
+            int(raw_timestamp) if isinstance(raw_timestamp, int) else 0
+        )
 
         return Vacancy(
             id=vacancy_id,

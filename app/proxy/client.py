@@ -73,9 +73,11 @@ class SharedHttpClient:
                 ):
                     response.raise_for_status()
 
-                await self._proxy_controller.rotate_proxy(
-                    f"{parser_name}: status {response.status_code} for {url}",
-                )
+                if self._proxy_controller:
+                    await self._proxy_controller.rotate_proxy(
+                        f"{parser_name}: status {response.status_code} "
+                        f"for {url}"
+                    )
                 continue
 
             response.raise_for_status()
