@@ -13,7 +13,7 @@ from app.proxy.manager import ProxyManager
 
 
 async def main() -> None:
-    http_client = AsyncClient()
+    http_client = AsyncClient(http2=False)
 
     proxy_manager = None
     if settings.PROXY_URL:
