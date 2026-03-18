@@ -1,17 +1,16 @@
 from functools import cached_property
 from itertools import product
-from typing import List, Tuple
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SearchGroup(BaseModel):
-    keywords: List[str]
-    include_any: List[List[str]] = []
-    exclude: List[str] = []
+    keywords: list[str]
+    include_any: list[list[str]] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
 
     @cached_property
-    def combinations(self) -> List[Tuple[str, List[str], List[str]]]:
+    def combinations(self) -> list[tuple[str, list[str], list[str]]]:
         if not self.include_any:
             return [(keyword, [], self.exclude) for keyword in self.keywords]
 
@@ -22,12 +21,12 @@ class SearchGroup(BaseModel):
 
 
 class SearchConfig(BaseModel):
-    global_exclude: List[str] = []
-    search_groups: List[SearchGroup]
+    global_exclude: list[str] = Field(default_factory=list)
+    search_groups: list[SearchGroup]
 
     @cached_property
-    def all_combinations(self) -> List[Tuple[str, List[str], List[str]]]:
-        result = []
+    def all_combinations(self) -> list[tuple[str, list[str], list[str]]]:
+        result: list[tuple[str, list[str], list[str]]] = []
         for group in self.search_groups:
             result.extend(group.combinations)
         return result

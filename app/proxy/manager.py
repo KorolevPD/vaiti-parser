@@ -1,31 +1,103 @@
 import asyncio
+from contextlib import asynccontextmanager
+import logging
+from typing import AsyncIterator
 
-from httpx import URL, Proxy
+from .provider import BaseProxyProvider, NullProxyProvider
+
+logger = logging.getLogger(__name__)
 
 
-class ProxyManager:
-    def __init__(self, url: URL | str, auth: tuple[str, str] | None) -> None:
-        self._proxy = Proxy(url, auth=auth)
-        self._lock = asyncio.Lock()
-        self._pause_event = asyncio.Event()
-        self._pause_event.set()
+class ProxyController:
+    def __init__(
+        self,
+        provider: BaseProxyProvider | None = None,
+        cooldown_seconds: float = 120,
+    ) -> None:
+        self._provider = provider or NullProxyProvider()
+        self._cooldown_seconds = cooldown_seconds
+        self._condition = asyncio.Condition()
+        self._active_requests = 0
+        self._rotation_requested = False
+        self._rotation_in_progress = False
+        self._cooldown_until = 0.0
 
-    async def get_proxy(self) -> Proxy:
-        return self._proxy
+    @property
+    def proxy_url(self) -> str | None:
+        return self._provider.proxy_url
 
-    async def refresh_proxy(self) -> None:
-        async with self._lock:
-            if not self._pause_event.is_set():
-                return  # уже обновляется
+    @property
+    def has_proxy(self) -> bool:
+        return self.proxy_url is not None
 
-            print("🔄 Refreshing proxy...")
-            self._pause_event.clear()
+    @asynccontextmanager
+    async def request_slot(self) -> AsyncIterator[None]:
+        await self._acquire_request_slot()
+        try:
+            yield
+        finally:
+            await self._release_request_slot()
 
-            # имитация запроса к API мобильного прокси
-            await asyncio.sleep(120)
+    async def _acquire_request_slot(self) -> None:
+        loop = asyncio.get_running_loop()
+        async with self._condition:
+            while True:
+                now = loop.time()
+                cooldown_remaining = self._cooldown_until - now
+                blocked = (
+                    self._rotation_requested
+                    or self._rotation_in_progress
+                    or cooldown_remaining > 0
+                )
+                if not blocked:
+                    self._active_requests += 1
+                    return
 
-            print("✅ Proxy updated:", self._proxy)
-            self._pause_event.set()
+                if cooldown_remaining > 0:
+                    try:
+                        await asyncio.wait_for(
+                            self._condition.wait(),
+                            timeout=cooldown_remaining,
+                        )
+                    except TimeoutError:
+                        continue
+                else:
+                    await self._condition.wait()
 
-    async def wait_if_paused(self) -> None:
-        await self._pause_event.wait()
+    async def _release_request_slot(self) -> None:
+        async with self._condition:
+            self._active_requests -= 1
+            self._condition.notify_all()
+
+    async def rotate_proxy(self, reason: str) -> None:
+        async with self._condition:
+            if self._rotation_in_progress:
+                logger.info(
+                    "Proxy rotation already in progress; skipping duplicate "
+                    "request: %s",
+                    reason,
+                )
+                return
+
+            self._rotation_requested = True
+            self._condition.notify_all()
+
+            while self._active_requests > 0:
+                await self._condition.wait()
+
+            self._rotation_requested = False
+            self._rotation_in_progress = True
+
+        logger.warning("Rotating proxy: %s", reason)
+        try:
+            await self._provider.rotate_ip(reason)
+        finally:
+            loop = asyncio.get_running_loop()
+            async with self._condition:
+                self._cooldown_until = loop.time() + self._cooldown_seconds
+                self._rotation_in_progress = False
+                self._condition.notify_all()
+
+    async def wait_until_ready(self) -> None:
+        async with self.request_slot():
+            return
