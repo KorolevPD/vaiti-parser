@@ -1,11 +1,11 @@
 # mypy: ignore-errors
 
 """
-create vacancy, salary and rating tables
+Create vacancy, salary and rating tables
 
-Revision ID: 5f9aec7d0790
+Revision ID: d32bd195d834
 Revises:
-Create Date: 2026-03-18 12:10:34.106264
+Create Date: 2026-03-19 12:21:12.824724
 """
 
 from typing import Sequence, Union
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 import sqlmodel
 
 # revision identifiers, used by Alembic.
-revision: str = "5f9aec7d0790"
+revision: str = "d32bd195d834"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -35,17 +35,15 @@ def upgrade() -> None:
     )
     op.create_table(
         "salary",
-        sa.Column("id", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column(
             "source", sqlmodel.sql.sqltypes.AutoString(), nullable=False
         ),
+        sa.Column("title", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("grade", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column(
-            "specialization_id",
+            "specialization",
             sqlmodel.sql.sqltypes.AutoString(),
             nullable=False,
-        ),
-        sa.Column(
-            "grade_id", sqlmodel.sql.sqltypes.AutoString(), nullable=False
         ),
         sa.Column("salary_min", sa.Integer(), nullable=False),
         sa.Column("salary_max", sa.Integer(), nullable=False),
@@ -54,7 +52,7 @@ def upgrade() -> None:
             sa.Enum("RUB", "USD", "EUR", name="currency"),
             nullable=True,
         ),
-        sa.PrimaryKeyConstraint("id"),
+        sa.PrimaryKeyConstraint("source", "title", "grade"),
     )
     op.create_table(
         "vacancy",
