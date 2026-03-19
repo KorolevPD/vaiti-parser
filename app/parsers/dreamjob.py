@@ -2,4 +2,5 @@ from . import BaseParser
 
 
 class DreamjobRatingParser(BaseParser):
-    pass
+    async def parse_once(self) -> None:
+        pass

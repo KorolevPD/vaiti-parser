@@ -4,7 +4,9 @@ import logging
 from httpx import AsyncClient
 
 from app.core.config import settings
+from app.parsers import BaseParser
 from app.parsers.avito import AvitoVacanciesParser
+from app.parsers.habr import HabrSalaryParser
 from app.proxy.client import SharedHttpClient
 from app.proxy.manager import ProxyController
 from app.proxy.models import ProxyConfig, ProxyCredentials
@@ -70,12 +72,15 @@ async def main() -> None:
             raw_client,
             proxy_controller=proxy_controller,
         )
-        parser = AvitoVacanciesParser(
-            shared_client,
-            proxy_controller=proxy_controller,
-            run_interval_seconds=settings.PARSER_RUN_INTERVAL_SECONDS,
-        )
-        await parser.run()
+
+        parsers: list[BaseParser] = [
+            AvitoVacanciesParser(shared_client, proxy_controller, 86400),
+            HabrSalaryParser(shared_client, proxy_controller, 86400),
+        ]
+
+        tasks = [asyncio.create_task(p.run()) for p in parsers]
+
+        await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":

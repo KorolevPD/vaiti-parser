@@ -40,10 +40,10 @@ class Vacancy(SQLModel, table=True):
 
 
 class Salary(SQLModel, table=True):
-    id: str = Field(primary_key=True)
-    source: str
-    specialization_id: str
-    grade_id: str
+    source: str = Field(primary_key=True)
+    title: str = Field(primary_key=True)
+    grade: str = Field(primary_key=True)
+    specialization: str
     salary_min: int
     salary_max: int
     salary_currency: Currency = Field(

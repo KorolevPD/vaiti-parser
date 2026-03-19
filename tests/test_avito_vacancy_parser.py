@@ -5,11 +5,7 @@ import pytest
 
 from app.parsers import ProxyRefreshRequired
 from app.parsers.avito.parser import AvitoVacanciesParser
-
-
-class DummyHttpClient:
-    async def get(self, *args: object, **kwargs: object) -> httpx.Response:
-        raise NotImplementedError
+from tests.conftest import DummyHttpClient
 
 
 def build_parser() -> AvitoVacanciesParser:

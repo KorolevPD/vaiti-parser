@@ -9,10 +9,10 @@ import yaml
 
 from app.models import Vacancy
 from app.parsers import BaseParser, ProxyRefreshRequired
+from app.storage import get_all, save
 from app.utils import normalize
 
 from .schemas import SearchConfig
-from .storage import get_all_vacancies, save_vacancy
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +65,7 @@ class AvitoVacanciesParser(BaseParser):
             if not vacancies:
                 return
 
-            for vacancy in vacancies:
-                save_vacancy(vacancy)
+            save(vacancies)
 
             if len(vacancies) < 50:
                 return
@@ -74,7 +73,7 @@ class AvitoVacanciesParser(BaseParser):
             page += 1
 
     async def complete_missing_details(self) -> None:
-        vacancies = get_all_vacancies()
+        vacancies = list(get_all(Vacancy))
         shuffle(vacancies)
         for vacancy in vacancies:
             if vacancy.employment_type:
@@ -82,7 +81,7 @@ class AvitoVacanciesParser(BaseParser):
 
             updated = await self.complete_vacancy(vacancy)
             if updated:
-                save_vacancy(updated)
+                save(updated)
 
     def build_search_params(
         self,
