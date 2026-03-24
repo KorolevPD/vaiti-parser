@@ -1,9 +1,10 @@
 import asyncio
 import logging
 from random import uniform
-from typing import Any
+from typing import Any, Literal
 
-import httpx
+from curl_cffi import AsyncSession, Response
+from curl_cffi.requests.exceptions import RequestException
 
 from app.proxy.manager import ProxyController
 
@@ -15,7 +16,7 @@ BLOCKING_STATUSES = {302, 403, 407, 429}
 class SharedHttpClient:
     def __init__(
         self,
-        client: httpx.AsyncClient,
+        client: AsyncSession[Response],
         proxy_controller: ProxyController | None = None,
         min_delay: float = 0.5,
         max_delay: float = 1.5,
@@ -29,16 +30,20 @@ class SharedHttpClient:
 
     async def request(
         self,
-        method: str,
+        method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"],
         url: str,
         *,
-        parser_name: str,
+        delay_range: tuple[float, float] | None = None,
         **kwargs: Any,
-    ) -> httpx.Response:
+    ) -> Response:
         attempt = 0
         while True:
             attempt += 1
-            await asyncio.sleep(uniform(self._min_delay, self._max_delay))
+            min_delay, max_delay = delay_range or (
+                self._min_delay,
+                self._max_delay,
+            )
+            await asyncio.sleep(uniform(min_delay, max_delay))
 
             try:
                 if self._proxy_controller:
@@ -54,45 +59,40 @@ class SharedHttpClient:
                         url,
                         **kwargs,
                     )
-            except httpx.TransportError as exc:
+            except RequestException as e:
                 if (
                     not self._proxy_controller
                     or attempt > self._retry_attempts
                 ):
                     raise
-
-                await self._proxy_controller.rotate_proxy(
-                    f"{parser_name}: transport error for {url}: {exc!r}",
-                )
+                logger.error(f"Failed request: {e}")
+                await self._proxy_controller.rotate_proxy()
                 continue
 
             if response.status_code in BLOCKING_STATUSES:
+                self._client.cookies.clear()
                 if (
                     not self._proxy_controller
                     or attempt > self._retry_attempts
                 ):
-                    response.raise_for_status()
+                    response.raise_for_status()  # type: ignore
 
                 if self._proxy_controller:
-                    await self._proxy_controller.rotate_proxy(
-                        f"{parser_name}: status {response.status_code} "
-                        f"for {url}"
-                    )
+                    await self._proxy_controller.rotate_proxy()
                 continue
 
-            response.raise_for_status()
+            response.raise_for_status()  # type: ignore
             return response
 
     async def get(
         self,
         url: str,
-        *,
-        parser_name: str,
+        delay_range: tuple[float, float] | None = None,
         **kwargs: Any,
-    ) -> httpx.Response:
+    ) -> Response:
         return await self.request(
             "GET",
             url,
-            parser_name=parser_name,
+            delay_range=delay_range,
             **kwargs,
         )

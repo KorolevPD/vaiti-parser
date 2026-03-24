@@ -69,13 +69,11 @@ class ProxyController:
             self._active_requests -= 1
             self._condition.notify_all()
 
-    async def rotate_proxy(self, reason: str) -> None:
+    async def rotate_proxy(self) -> None:
         async with self._condition:
             if self._rotation_in_progress:
                 logger.info(
-                    "Proxy rotation already in progress; skipping duplicate "
-                    "request: %s",
-                    reason,
+                    "Proxy rotation already in progress; skipping duplicate"
                 )
                 return
 
@@ -88,9 +86,9 @@ class ProxyController:
             self._rotation_requested = False
             self._rotation_in_progress = True
 
-        logger.warning("Rotating proxy: %s", reason)
+        logger.warning("Rotating proxy")
         try:
-            await self._provider.rotate_ip(reason)
+            await self._provider.rotate_ip()
         finally:
             loop = asyncio.get_running_loop()
             async with self._condition:

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import logging
 from urllib.parse import quote, urlsplit, urlunsplit
 
-import httpx
+from curl_cffi import AsyncSession
 
 from .models import ProxyConfig
 
@@ -16,7 +16,7 @@ class BaseProxyProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def rotate_ip(self, reason: str) -> None:
+    async def rotate_ip(self) -> None:
         raise NotImplementedError
 
 
@@ -25,11 +25,8 @@ class NullProxyProvider(BaseProxyProvider):
     def proxy_url(self) -> str | None:
         return None
 
-    async def rotate_ip(self, reason: str) -> None:
-        logger.warning(
-            "Proxy rotation requested without a configured proxy: %s",
-            reason,
-        )
+    async def rotate_ip(self) -> None:
+        logger.warning("Proxy rotation requested without a configured proxy")
 
 
 class MobileProxyProvider(BaseProxyProvider):
@@ -51,16 +48,15 @@ class MobileProxyProvider(BaseProxyProvider):
             (parts.scheme, netloc, parts.path, parts.query, parts.fragment),
         )
 
-    async def rotate_ip(self, reason: str) -> None:
+    async def rotate_ip(self) -> None:
         if not self._config.rotate_url:
             logger.warning(
-                "Proxy rotation requested but PROXY_ROTATE_URL is not set: %s",
-                reason,
+                "Proxy rotation requested but PROXY_ROTATE_URL is not set"
             )
             return
 
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with AsyncSession(timeout=30) as client:
             response = await client.get(self._config.rotate_url)
             response.raise_for_status()
 
-        logger.info("Proxy IP rotation completed: %s", reason)
+        logger.info("Proxy IP rotation completed")

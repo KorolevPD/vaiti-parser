@@ -8,7 +8,6 @@ from app.proxy.provider import BaseProxyProvider
 
 class DummyProxyProvider(BaseProxyProvider):
     def __init__(self) -> None:
-        self.rotate_calls: list[str] = []
         self.rotation_started = asyncio.Event()
         self.release_rotation = asyncio.Event()
 
@@ -16,8 +15,7 @@ class DummyProxyProvider(BaseProxyProvider):
     def proxy_url(self) -> str | None:
         return "http://proxy.test"
 
-    async def rotate_ip(self, reason: str) -> None:
-        self.rotate_calls.append(reason)
+    async def rotate_ip(self) -> None:
         self.rotation_started.set()
         await self.release_rotation.wait()
 
@@ -44,7 +42,7 @@ async def test_rotation_waits_for_active_requests_and_cooldown() -> None:
     await active_request_entered.wait()
 
     rotate_task = asyncio.create_task(
-        controller.rotate_proxy("need fresh ip"),
+        controller.rotate_proxy(),
     )
     await asyncio.sleep(0.01)
     assert not provider.rotation_started.is_set()
@@ -55,7 +53,6 @@ async def test_rotation_waits_for_active_requests_and_cooldown() -> None:
 
     allow_request_exit.set()
     await provider.rotation_started.wait()
-    assert provider.rotate_calls == ["need fresh ip"]
 
     await asyncio.sleep(0.01)
     assert not second_request_entered.is_set()

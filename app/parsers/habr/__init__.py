@@ -1,3 +1,3 @@
-from .parser import HabrSalaryParser
+from .parser import HabrSalaryParser, HarbRatingParser
 
-__all__ = ["HabrSalaryParser"]
+__all__ = ["HabrSalaryParser", "HarbRatingParser"]

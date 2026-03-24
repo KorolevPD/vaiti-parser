@@ -13,7 +13,7 @@ class Currency(str, Enum):
 
 class Vacancy(SQLModel, table=True):
     id: str = Field(primary_key=True)
-    source: str
+    source: str = Field(primary_key=True)
     company_name: Optional[str] = None
     company_logo_url: Optional[str] = None
     position_title: Optional[str] = None
@@ -52,6 +52,8 @@ class Salary(SQLModel, table=True):
 
 
 class Rating(SQLModel, table=True):
-    id: str = Field(primary_key=True)
-    company_id: str
+    internal_id: str = Field(primary_key=True)
+    source: str = Field(primary_key=True)
+    name: str = Field(primary_key=True)
     rating: float
+    reviews_count: int

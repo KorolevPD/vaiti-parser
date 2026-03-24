@@ -1,10 +1,12 @@
+import html
 import json
 import logging
 from pathlib import Path
 from random import shuffle
 
 from bs4 import BeautifulSoup
-import httpx
+from curl_cffi import Response
+from curl_cffi.requests.exceptions import HTTPError
 import yaml
 
 from app.models import Vacancy
@@ -33,6 +35,8 @@ class AvitoVacanciesParser(BaseParser):
         self._config_path = Path(config_path)
 
     async def parse_once(self) -> None:
+        await self.fetch(AVITO_BASE_URL)
+
         config = self.load_config()
         for search in config.all_combinations:
             await self.run_search(search, config.global_exclude)
@@ -66,9 +70,6 @@ class AvitoVacanciesParser(BaseParser):
                 return
 
             save(vacancies)
-
-            if len(vacancies) < 50:
-                return
 
             page += 1
 
@@ -111,7 +112,7 @@ class AvitoVacanciesParser(BaseParser):
 
     def extract_catalog_items(
         self,
-        response: httpx.Response,
+        response: Response,
         *,
         global_exclude: list[str],
         page_exclude: list[str],
@@ -228,37 +229,39 @@ class AvitoVacanciesParser(BaseParser):
 
     async def complete_vacancy(self, vacancy: Vacancy) -> Vacancy | None:
         try:
-            response = await self.fetch(vacancy.source_url)
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 404:
+            url = vacancy.source_url.replace(
+                AVITO_BASE_URL, "https://www.avito.ru/items/ads"
+            )
+            r = await self.fetch(url)
+        except HTTPError as e:
+            if e.response.status_code == 404:
                 logger.info(
                     "Vacancy not found anymore: %s", vacancy.source_url
                 )
                 return None
             raise
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        data = json.loads(r.text)
+        items = data.get("buyerItem", {}).get("paramsBlock", {}).get("items")
 
-        for item in soup.find_all("li"):
-            label = item.find("span")
-            if label is None:
-                continue
+        if items:
+            for item in items:
+                title = item.get("title")
+                description = item.get("description")
+                if "Формат работы" in title:
+                    vacancy.work_format = description
+                if "Занятость" in title:
+                    vacancy.employment_type = description
 
-            label_text = label.get_text(strip=True)
-            raw_value = (
-                item.get_text(strip=True).replace(label_text, "").strip()
-            )
-
-            if "Формат работы" in label_text:
-                vacancy.work_format = raw_value
-
-            if "Занятость" in label_text:
-                vacancy.employment_type = raw_value
-
-        description = soup.select_one(
-            '[data-marker="item-view/item-description"]'
+        description = (
+            data.get("buyerItem", {}).get("item", {}).get("description")
         )
-        if description is not None:
-            vacancy.raw_text = description.get_text("\n", strip=True)
+        if description:
+            vacancy.raw_text = BeautifulSoup(
+                html.unescape(description), "html.parser"
+            ).get_text(separator="\n", strip=True)
+
+        # Убираем параметры из url
+        vacancy.source_url = vacancy.source_url.split("?")[0]
 
         return vacancy

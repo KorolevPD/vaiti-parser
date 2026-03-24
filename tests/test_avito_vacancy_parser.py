@@ -1,6 +1,6 @@
 import json
 
-import httpx
+from curl_cffi import Response
 import pytest
 
 from app.parsers import ProxyRefreshRequired
@@ -18,31 +18,31 @@ def build_parser() -> AvitoVacanciesParser:
 
 def test_extract_catalog_items_maps_vacancy() -> None:
     parser = build_parser()
-    response = httpx.Response(
-        200,
-        text=json.dumps(
-            {
-                "catalog": {
-                    "items": [
-                        {
-                            "type": "item",
-                            "categoryId": 111,
-                            "id": 123,
-                            "title": "Python developer",
-                            "description": "Backend platform work",
-                            "urlPath": "/moskva/vakansii/python_developer_123",
-                            "sortTimeStamp": 1700000000,
-                            "location": {"name": "Москва"},
-                            "geo": {
-                                "formattedAddress": "Москва, Россия",
-                            },
-                            "priceDetailed": {"fullString": "200 000 ₽"},
-                        }
-                    ]
-                }
-            },
-        ),
+    response_text = json.dumps(
+        {
+            "catalog": {
+                "items": [
+                    {
+                        "type": "item",
+                        "categoryId": 111,
+                        "id": 123,
+                        "title": "Python developer",
+                        "description": "Backend platform work",
+                        "urlPath": "/moskva/vakansii/python_developer_123",
+                        "sortTimeStamp": 1700000000,
+                        "location": {"name": "Москва"},
+                        "geo": {
+                            "formattedAddress": "Москва, Россия",
+                        },
+                        "priceDetailed": {"fullString": "200 000 ₽"},
+                    }
+                ]
+            }
+        },
     )
+    response = Response(None)
+    response.status_code = 200
+    response._text = response_text
 
     vacancies = parser.extract_catalog_items(
         response,
@@ -61,24 +61,24 @@ def test_extract_catalog_items_requests_proxy_refresh_on_missing_urls() -> (
     None
 ):
     parser = build_parser()
-    response = httpx.Response(
-        200,
-        text=json.dumps(
-            {
-                "catalog": {
-                    "items": [
-                        {
-                            "type": "item",
-                            "categoryId": 111,
-                            "id": 123,
-                            "title": "Python developer",
-                            "description": "Backend platform work",
-                        }
-                    ]
-                }
-            },
-        ),
+    response_text = json.dumps(
+        {
+            "catalog": {
+                "items": [
+                    {
+                        "type": "item",
+                        "categoryId": 111,
+                        "id": 123,
+                        "title": "Python developer",
+                        "description": "Backend platform work",
+                    }
+                ]
+            }
+        },
     )
+    response = Response(None)
+    response.status_code = 200
+    response._text = response_text
 
     with pytest.raises(ProxyRefreshRequired):
         parser.extract_catalog_items(

@@ -1,11 +1,14 @@
 from random import shuffle
 from typing import Any, Dict, List
 
-from app.models import Salary
+from bs4 import BeautifulSoup, ResultSet, Tag
+
+from app.models import Rating, Salary
 from app.parsers import BaseParser
 from app.storage import save
 
-HABR_API_URL = "https://career.habr.com/api/frontend_v1"
+HABR_BASE_URL = "https://career.habr.com"
+HABR_API_URL = f"{HABR_BASE_URL}/api/frontend_v1"
 
 
 class HabrSalaryParser(BaseParser):
@@ -20,7 +23,7 @@ class HabrSalaryParser(BaseParser):
 
     async def parse_once(self) -> None:
         r = await self.fetch(f"{HABR_API_URL}/specializations")
-        data = r.json()
+        data = r.json()  # type: ignore
         aliases = [
             item["alias"]
             for group in data.get("groups", [])
@@ -33,7 +36,7 @@ class HabrSalaryParser(BaseParser):
                 f"{HABR_API_URL}/salary_calculator/general_graph",
                 params={"spec_aliases[]": alias},
             )
-            salaries = self.build_salaries(r.json(), alias)
+            salaries = self.build_salaries(r.json(), alias)  # type: ignore
             save(salaries)
 
     def build_salaries(
@@ -60,4 +63,55 @@ class HabrSalaryParser(BaseParser):
 
 
 class HarbRatingParser(BaseParser):
-    pass
+    parser_name = "habr_rating"
+
+    def __init__(
+        self,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(*args, **kwargs)  # type: ignore
+
+    async def parse_once(self) -> None:
+        page = 1
+
+        while True:
+
+            r = await self.fetch(
+                f"{HABR_BASE_URL}/companies",
+                params={"page": page, "with_ratings": 1},
+            )
+
+            soup = BeautifulSoup(r.text, "html.parser")
+
+            companies = soup.select(".companies-item")
+
+            if not companies:
+                break
+
+            ratings = self.build_ratings(companies)
+            save(ratings)
+
+            page += 1
+
+    def build_ratings(self, companies: ResultSet[Tag]) -> List[Rating]:
+        ratings = []
+
+        for company in companies:
+            name_tag = company.select_one(".companies-item-name .title")
+            rating_tag = company.select_one(
+                ".companies-item-name__rating .rating"
+            )
+
+            if not (name_tag and rating_tag):
+                continue
+
+            rating = Rating(
+                source="habr",
+                name=name_tag.text.strip(),
+                rating=float(rating_tag.text.strip()),
+            )
+
+            ratings.append(rating)
+
+        return ratings

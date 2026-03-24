@@ -1,3 +1,4 @@
+import logging
 from typing import Iterable, Optional, Sequence, Type, TypeVar, Union
 
 from sqlalchemy.inspection import inspect
@@ -6,7 +7,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.core.config import settings
 
 T = TypeVar("T", bound=SQLModel)
-
+logger = logging.getLogger(__name__)
 engine = create_engine(settings.DATABASE_URL, echo=False)
 
 
@@ -35,10 +36,10 @@ def save(objs: Union[SQLModel, Iterable[SQLModel]]) -> None:
                 for field, value in obj.model_dump(exclude_unset=True).items():
                     setattr(existing, field, value)
                 session.add(existing)
-                print(f"Updated: {type(obj).__name__} {pk_values}")
+                logger.info(f"Updated: {type(obj).__name__} {pk_values}")
             else:
                 session.add(obj)
-                print(f"Added: {type(obj).__name__} {pk_values}")
+                logger.info(f"Added: {type(obj).__name__} {pk_values}")
 
         session.commit()
 
