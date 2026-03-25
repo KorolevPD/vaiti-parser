@@ -13,8 +13,7 @@ class Settings(BaseSettings):
     PROXY_LOGIN: Optional[str] = Field(None)
     PROXY_PASSWORD: Optional[str] = Field(None)
     PROXY_ROTATE_URL: Optional[str] = Field(None)
-    PROXY_COOLDOWN_SECONDS: float = Field(120)
-    PARSER_RUN_INTERVAL_SECONDS: float = Field(900)
+    PROXY_COOLDOWN_SECONDS: float = Field(0)
 
     class Config:
         env_file = ".env"

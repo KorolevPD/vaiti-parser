@@ -5,19 +5,21 @@ from pathlib import Path
 from random import shuffle
 
 from bs4 import BeautifulSoup
+from confluent_kafka import Producer
 from curl_cffi import Response
 from curl_cffi.requests.exceptions import HTTPError
 import yaml
 
 from app.models import Vacancy
 from app.parsers import BaseParser, ProxyRefreshRequired
-from app.storage import get_all, save
+from app.storage import delete, get, save
 from app.utils import normalize
 
 from .schemas import SearchConfig
 
 logger = logging.getLogger(__name__)
 
+BASE_DIR = Path(__file__).resolve().parent
 AVITO_API_URL = "https://www.avito.ru/web/1/js/items"
 AVITO_BASE_URL = "https://www.avito.ru"
 
@@ -28,14 +30,18 @@ class AvitoVacanciesParser(BaseParser):
     def __init__(
         self,
         *args: object,
-        config_path: str = "configs/avito_vacancies.yaml",
+        config_path: str = "config.yaml",
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
-        self._config_path = Path(config_path)
+        self._config_path = BASE_DIR / config_path
+        self.kafka_producer = Producer(
+            {"bootstrap.servers": "http://kafka:9092"}
+        )
 
     async def parse_once(self) -> None:
         await self.fetch(AVITO_BASE_URL)
+        delete(Vacancy, source="avito")
 
         config = self.load_config()
         for search in config.all_combinations:
@@ -74,7 +80,7 @@ class AvitoVacanciesParser(BaseParser):
             page += 1
 
     async def complete_missing_details(self) -> None:
-        vacancies = list(get_all(Vacancy))
+        vacancies = list(get(Vacancy))
         shuffle(vacancies)
         for vacancy in vacancies:
             if vacancy.employment_type:
@@ -83,6 +89,7 @@ class AvitoVacanciesParser(BaseParser):
             updated = await self.complete_vacancy(vacancy)
             if updated:
                 save(updated)
+                self.send_to_kafka(updated)
 
     def build_search_params(
         self,
@@ -265,3 +272,11 @@ class AvitoVacanciesParser(BaseParser):
         vacancy.source_url = vacancy.source_url.split("?")[0]
 
         return vacancy
+
+    def send_to_kafka(self, v: Vacancy) -> None:
+        self.kafka_producer.produce(
+            "vacancy.discovered",
+            key=f"{v.id}:{v.source}",
+            value=v.model_dump_json(),
+        )
+        self.kafka_producer.flush()

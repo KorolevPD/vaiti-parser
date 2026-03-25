@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import json
 import logging
 from urllib.parse import quote, urlsplit, urlunsplit
 
@@ -7,6 +8,11 @@ from curl_cffi import AsyncSession
 from .models import ProxyConfig
 
 logger = logging.getLogger(__name__)
+
+
+class ProxyRotationError(Exception):
+    def __init__(self, msg: str):
+        super().__init__(msg)
 
 
 class BaseProxyProvider(ABC):
@@ -55,8 +61,12 @@ class MobileProxyProvider(BaseProxyProvider):
             )
             return
 
-        async with AsyncSession(timeout=30) as client:
-            response = await client.get(self._config.rotate_url)
-            response.raise_for_status()
+        async with AsyncSession(timeout=300) as client:
+            r = await client.get(self._config.rotate_url)
+            r.raise_for_status()
+
+            data = json.loads(r.text)
+            if data.get("status", "ERR") == "ERR":
+                raise ProxyRotationError(data.get("message"))
 
         logger.info("Proxy IP rotation completed")

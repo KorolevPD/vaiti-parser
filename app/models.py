@@ -1,8 +1,17 @@
 from enum import Enum
 from typing import Optional
 
+from pydantic import ConfigDict
+from pydantic.alias_generators import to_camel
 from sqlalchemy import Column, Enum as SAEnum
 from sqlmodel import Field, SQLModel
+
+
+class BaseSQLModel(SQLModel):
+    model_config = ConfigDict(
+        validate_by_name=True,
+        alias_generator=to_camel,
+    )
 
 
 class Currency(str, Enum):
@@ -11,7 +20,7 @@ class Currency(str, Enum):
     EUR = "EUR"
 
 
-class Vacancy(SQLModel, table=True):
+class Vacancy(BaseSQLModel, table=True):
     id: str = Field(primary_key=True)
     source: str = Field(primary_key=True)
     company_name: Optional[str] = None
@@ -39,7 +48,7 @@ class Vacancy(SQLModel, table=True):
     attributes: Optional[str] = None
 
 
-class Salary(SQLModel, table=True):
+class Salary(BaseSQLModel, table=True):
     source: str = Field(primary_key=True)
     title: str = Field(primary_key=True)
     grade: str = Field(primary_key=True)
@@ -51,9 +60,9 @@ class Salary(SQLModel, table=True):
     )
 
 
-class Rating(SQLModel, table=True):
+class Rating(BaseSQLModel, table=True):
     internal_id: str = Field(primary_key=True)
     source: str = Field(primary_key=True)
     name: str = Field(primary_key=True)
     rating: float
-    reviews_count: int
+    reviews_count: Optional[int] = None

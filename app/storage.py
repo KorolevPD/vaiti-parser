@@ -1,7 +1,8 @@
 import logging
-from typing import Iterable, Optional, Sequence, Type, TypeVar, Union
+from typing import Any, Iterable, Optional, Sequence, Type, TypeVar, Union
 
 from sqlalchemy.inspection import inspect
+import sqlmodel
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.core.config import settings
@@ -44,16 +45,38 @@ def save(objs: Union[SQLModel, Iterable[SQLModel]]) -> None:
         session.commit()
 
 
-def get_all(
-    model: Type[T], limit: Optional[int] = None, offset: Optional[int] = None
+def get(
+    model: Type[T],
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+    **filters: Any,
 ) -> Sequence[T]:
     with get_session() as session:
         stmt = select(model)
 
-        if offset:
-            stmt = stmt.offset(offset)
-
         if limit:
             stmt = stmt.limit(limit)
 
+        if offset:
+            stmt = stmt.offset(offset)
+
+        for field, value in filters.items():
+            stmt = stmt.where(getattr(model, field) == value)
+
         return session.exec(stmt).all()
+
+
+def delete(
+    model: Type[T],
+    **filters: Any,
+) -> int:
+    with get_session() as session:
+        stmt = sqlmodel.delete(model)
+
+        for field, value in filters.items():
+            stmt = stmt.where(getattr(model, field) == value)
+
+        result = session.exec(stmt)
+        session.commit()
+
+        return result.rowcount

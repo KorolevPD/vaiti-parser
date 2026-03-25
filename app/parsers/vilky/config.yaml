@@ -1,0 +1,11 @@
+- name: "Разработчик Python"
+  specialization: "Разработчик"
+  skills: ["python"]
+
+- name: "Разработчик C++"
+  specialization: "Разработчик"
+  skills: ["c++"]
+
+- name: "Разработчик Rust"
+  specialization: "Разработчик"
+  skills: ["rust"]
