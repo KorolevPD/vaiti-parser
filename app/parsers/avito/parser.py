@@ -10,6 +10,7 @@ from curl_cffi import Response
 from curl_cffi.requests.exceptions import HTTPError
 import yaml
 
+from app.core.config import settings
 from app.models import Vacancy
 from app.parsers import BaseParser, ProxyRefreshRequired
 from app.storage import delete, get, save
@@ -35,9 +36,11 @@ class AvitoVacanciesParser(BaseParser):
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
         self._config_path = BASE_DIR / config_path
-        self.kafka_producer = Producer(
-            {"bootstrap.servers": "http://kafka:9092"}
-        )
+        self.kafka_producer = None
+        if settings.KAFKA_BOOTSTRAP_SERVERS:
+            self.kafka_producer = Producer(
+                {"bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS}
+            )
 
     async def parse_once(self) -> None:
         await self.fetch(AVITO_BASE_URL)
@@ -83,13 +86,16 @@ class AvitoVacanciesParser(BaseParser):
         vacancies = list(get(Vacancy))
         shuffle(vacancies)
         for vacancy in vacancies:
-            if vacancy.employment_type:
-                continue
-
             updated = await self.complete_vacancy(vacancy)
             if updated:
-                save(updated)
                 self.send_to_kafka(updated)
+                save(updated)
+            else:
+                self.delete_from_kafka(vacancy)
+                delete(vacancy)
+
+        if self.kafka_producer:
+            self.kafka_producer.flush()
 
     def build_search_params(
         self,
@@ -229,7 +235,7 @@ class AvitoVacanciesParser(BaseParser):
             raw_text=description,
             location=location,
             city=city,
-            source_url=f"{AVITO_BASE_URL}{url_path}",
+            source_url=f"{AVITO_BASE_URL}{url_path}".split("?")[0],
             salary_raw=salary_raw,
             published_at=published_at,
         )
@@ -268,15 +274,22 @@ class AvitoVacanciesParser(BaseParser):
                 html.unescape(description), "html.parser"
             ).get_text(separator="\n", strip=True)
 
-        # Убираем параметры из url
         vacancy.source_url = vacancy.source_url.split("?")[0]
 
         return vacancy
 
     def send_to_kafka(self, v: Vacancy) -> None:
-        self.kafka_producer.produce(
-            "vacancy.discovered",
-            key=f"{v.id}:{v.source}",
-            value=v.model_dump_json(),
-        )
-        self.kafka_producer.flush()
+        if self.kafka_producer:
+            self.kafka_producer.produce(
+                "vacancy.discovered",
+                key=f"{v.source}:{v.id}",
+                value=v.model_dump_json(),
+            )
+
+    def delete_from_kafka(self, v: Vacancy) -> None:
+        if self.kafka_producer:
+            self.kafka_producer.produce(
+                "vacancy.archived",
+                key=f"{v.source}:{v.id}",
+                value=json.dumps({"source": v.source, "externalId": v.id}),
+            )

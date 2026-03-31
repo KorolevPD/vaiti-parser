@@ -3,7 +3,9 @@ from random import shuffle
 from typing import List, Optional
 
 from bs4 import BeautifulSoup
+from confluent_kafka import Producer
 
+from app.core.config import settings
 from app.models import Rating
 from app.parsers import BaseParser
 from app.storage import save
@@ -25,6 +27,11 @@ class DreamjobRatingParser(BaseParser):
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
+        self.kafka_producer = None
+        if settings.KAFKA_BOOTSTRAP_SERVERS:
+            self.kafka_producer = Producer(
+                {"bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS}
+            )
 
     async def parse_once(self) -> None:
         await self.fetch(DREAMJOB_BASE_URL)
@@ -33,7 +40,11 @@ class DreamjobRatingParser(BaseParser):
         for company in companies:
             rating = await self.search(company)
             if rating:
+                self.send_to_kafka(rating)
                 save(rating)
+
+        if self.kafka_producer:
+            self.kafka_producer.flush()
 
     async def get_companies(self) -> List[Company]:
         page = 1
@@ -84,10 +95,23 @@ class DreamjobRatingParser(BaseParser):
         ):
             return None
 
+        try:
+            rating = float(str(rating_element.contents[0]).strip())
+        except ValueError:
+            return None
+
         return Rating(
-            internal_id=company.id,
+            company_id=company.id,
             source="dreamjob",
-            name=name_element.get_text(strip=True),
-            rating=str(rating_element.contents[0]).strip(),
-            reviews_count=reviews_element.get_text(strip=True),
+            company_name=name_element.get_text(strip=True),
+            rating=rating,
+            reviews_count=int(reviews_element.get_text(strip=True)),
         )
+
+    def send_to_kafka(self, rating: Rating) -> None:
+        if self.kafka_producer:
+            self.kafka_producer.produce(
+                "rating.discovered",
+                key=f"{rating.source}:{rating.company_name}",
+                value=rating.model_dump_json(),
+            )

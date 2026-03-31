@@ -62,7 +62,12 @@ class MobileProxyProvider(BaseProxyProvider):
             return
 
         async with AsyncSession(timeout=300) as client:
-            r = await client.get(self._config.rotate_url)
+            r = await client.get(
+                self._config.rotate_url,
+                headers={
+                    "Authorization": "Bearer e9e3f4832dff348b00b5c18130e3187e"
+                },
+            )
             r.raise_for_status()
 
             data = json.loads(r.text)

@@ -5,7 +5,7 @@ Create vacancy, salary and rating tables
 
 Revision ID: d32bd195d834
 Revises:
-Create Date: 2026-03-25 14:31:26.264504
+Create Date: 2026-03-31 13:56:47.182752
 """
 
 from typing import Sequence, Union
@@ -23,41 +23,67 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     op.create_table(
-        "rating",
+        "ratings",
         sa.Column(
-            "internal_id", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            "company_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "company_name", sqlmodel.sql.sqltypes.AutoString(), nullable=False
         ),
         sa.Column(
             "source", sqlmodel.sql.sqltypes.AutoString(), nullable=False
         ),
-        sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column("rating", sa.Float(), nullable=False),
-        sa.Column("reviews_count", sa.Integer(), nullable=False),
-        sa.PrimaryKeyConstraint("internal_id", "source", "name"),
+        sa.Column("reviews_count", sa.Integer(), nullable=True),
+        sa.Column("timestamp", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("company_name", "source"),
     )
     op.create_table(
-        "salary",
+        "salaries",
         sa.Column(
             "source", sqlmodel.sql.sqltypes.AutoString(), nullable=False
         ),
-        sa.Column("title", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("grade", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column(
-            "specialization",
+            "external_title",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=False,
+        ),
+        sa.Column(
+            "external_grade",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=False,
+        ),
+        sa.Column(
+            "external_specialization",
             sqlmodel.sql.sqltypes.AutoString(),
             nullable=False,
         ),
         sa.Column("salary_min", sa.Integer(), nullable=False),
         sa.Column("salary_max", sa.Integer(), nullable=False),
         sa.Column(
-            "salary_currency",
+            "currency",
             sa.Enum("RUB", "USD", "EUR", name="currency"),
             nullable=True,
         ),
-        sa.PrimaryKeyConstraint("source", "title", "grade"),
+        sa.Column(
+            "company_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "company_name", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "specialization_id",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=True,
+        ),
+        sa.Column(
+            "grade_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column("timestamp", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("source", "external_title", "external_grade"),
     )
     op.create_table(
-        "vacancy",
+        "vacancies",
         sa.Column("id", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column(
             "source", sqlmodel.sql.sqltypes.AutoString(), nullable=False
@@ -103,35 +129,12 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("published_at", sa.Integer(), nullable=False),
-        sa.Column(
-            "grade_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column(
-            "specialization_id",
-            sqlmodel.sql.sqltypes.AutoString(),
-            nullable=True,
-        ),
-        sa.Column(
-            "domain_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column(
-            "skill_ids", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column(
-            "tool_ids", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column(
-            "embedding", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column(
-            "attributes", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
         sa.PrimaryKeyConstraint("id", "source"),
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_table("vacancy", if_exists=True)
-    op.drop_table("salary", if_exists=True)
-    op.drop_table("rating", if_exists=True)
+    op.drop_table("vacancies", if_exists=True)
+    op.drop_table("salaries", if_exists=True)
+    op.drop_table("ratings", if_exists=True)

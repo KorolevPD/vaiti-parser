@@ -2,7 +2,9 @@ from random import shuffle
 from typing import Any, Dict, List
 
 from bs4 import BeautifulSoup, ResultSet, Tag
+from confluent_kafka import Producer
 
+from app.core.config import settings
 from app.models import Rating, Salary
 from app.parsers import BaseParser
 from app.storage import save
@@ -20,6 +22,11 @@ class HabrSalaryParser(BaseParser):
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
+        self.kafka_producer = None
+        if settings.KAFKA_BOOTSTRAP_SERVERS:
+            self.kafka_producer = Producer(
+                {"bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS}
+            )
 
     async def parse_once(self) -> None:
         r = await self.fetch(f"{HABR_API_URL}/specializations")
@@ -37,7 +44,11 @@ class HabrSalaryParser(BaseParser):
                 params={"spec_aliases[]": alias},
             )
             salaries = self.build_salaries(r.json(), alias)  # type: ignore
+            self.send_to_kafka(salaries)
             save(salaries)
+
+        if self.kafka_producer:
+            self.kafka_producer.flush()
 
     def build_salaries(
         self, data: Dict[str, Any], specialization: str
@@ -50,9 +61,9 @@ class HabrSalaryParser(BaseParser):
 
             salary = Salary(
                 source="habr",
-                title=item["seoTitle"][0],
-                grade=item["name"],
-                specialization=specialization,
+                external_title=item["seoTitle"][0],
+                external_grade=item["name"],
+                external_specialization=specialization,
                 salary_min=item["min"],
                 salary_max=item["max"],
             )
@@ -60,6 +71,15 @@ class HabrSalaryParser(BaseParser):
             salaries.append(salary)
 
         return salaries
+
+    def send_to_kafka(self, salaries: List[Salary]) -> None:
+        if self.kafka_producer:
+            for s in salaries:
+                self.kafka_producer.produce(
+                    "salary.discovered",
+                    key=f"{s.source}:{s.external_title}:{s.external_grade}",
+                    value=s.model_dump_json(),
+                )
 
 
 class HarbRatingParser(BaseParser):
@@ -71,6 +91,11 @@ class HarbRatingParser(BaseParser):
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
+        self.kafka_producer = None
+        if settings.KAFKA_BOOTSTRAP_SERVERS:
+            self.kafka_producer = Producer(
+                {"bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS}
+            )
 
     async def parse_once(self) -> None:
         page = 1
@@ -90,9 +115,13 @@ class HarbRatingParser(BaseParser):
                 break
 
             ratings = self.build_ratings(companies)
+            self.send_to_kafka(ratings)
             save(ratings)
 
             page += 1
+
+        if self.kafka_producer:
+            self.kafka_producer.flush()
 
     def build_ratings(self, companies: ResultSet[Tag]) -> List[Rating]:
         ratings = []
@@ -108,10 +137,19 @@ class HarbRatingParser(BaseParser):
 
             rating = Rating(
                 source="habr",
-                name=name_tag.text.strip(),
+                company_name=name_tag.text.strip(),
                 rating=float(rating_tag.text.strip()),
             )
 
             ratings.append(rating)
 
         return ratings
+
+    def send_to_kafka(self, ratings: List[Rating]) -> None:
+        if self.kafka_producer:
+            for r in ratings:
+                self.kafka_producer.produce(
+                    "rating.discovered",
+                    key=f"{r.source}:{r.company_name}",
+                    value=r.model_dump_json(),
+                )

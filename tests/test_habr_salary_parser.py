@@ -57,15 +57,15 @@ def test_build_salaries_skips_all_group_and_maps_fields() -> None:
 
     junior = salaries[0]
     assert junior.source == "habr"
-    assert junior.title == "Python developer"
-    assert junior.grade == "Junior"
-    assert junior.specialization == "python"
+    assert junior.external_title == "Python developer"
+    assert junior.external_grade == "Junior"
+    assert junior.external_specialization == "python"
     assert junior.salary_min == 120000
     assert junior.salary_max == 180000
-    assert junior.salary_currency == Currency.RUB
+    assert junior.currency == Currency.RUB
 
     middle = salaries[1]
-    assert middle.grade == "Middle"
+    assert middle.external_grade == "Middle"
     assert middle.salary_min == 220000
     assert middle.salary_max == 320000
 

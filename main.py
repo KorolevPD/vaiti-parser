@@ -9,11 +9,37 @@ from app.parsers import BaseParser
 from app.parsers.avito import AvitoVacanciesParser
 from app.parsers.dreamjob import DreamjobRatingParser
 from app.parsers.habr import HabrSalaryParser, HarbRatingParser
-from app.parsers.vilky import VilkySalaryParser
 from app.proxy.client import SharedHttpClient
 from app.proxy.manager import ProxyController
 from app.proxy.models import ProxyConfig, ProxyCredentials
 from app.proxy.provider import MobileProxyProvider
+
+DAY = 86400
+WEEK = DAY * 7
+MONTH = DAY * 30
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, "
+        "like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image"
+        "/avif,image/webp,image/apng,*/*;q=0.8"
+    ),
+    "Accept-Language": "en-US,en;q=0.9,ru-RU;q=0.8,ru;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Sec-Ch-Ua": (
+        'Not:A-Brand";v="99", "Google Chrome";v="120", "Chromium";v="120'
+    ),
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+}
 
 
 async def main() -> None:
@@ -42,11 +68,12 @@ async def main() -> None:
         proxy = proxy_controller.proxy_url
 
     async with AsyncSession(
+        headers=HEADERS,
         proxy=proxy,
         impersonate="chrome",
         allow_redirects=True,
         http_version="v2",
-        timeout=30,
+        timeout=60,
         max_clients=1,
     ) as raw_client:
         shared_client = SharedHttpClient(
@@ -56,14 +83,26 @@ async def main() -> None:
 
         parsers: list[BaseParser] = [
             AvitoVacanciesParser(
-                shared_client,
-                86400,
-                request_delay_range=(2.0, 10.0),
+                http_client=shared_client,
+                proxy_controller=proxy_controller,
+                run_interval_seconds=DAY,
+                request_delay_range=(2.0, 5.0),
             ),
-            DreamjobRatingParser(shared_client, 86400),
-            HabrSalaryParser(shared_client, 86400),
-            HarbRatingParser(shared_client, 86400),
-            VilkySalaryParser(shared_client, 86400),
+            DreamjobRatingParser(
+                http_client=shared_client,
+                proxy_controller=proxy_controller,
+                run_interval_seconds=WEEK,
+            ),
+            HarbRatingParser(
+                http_client=shared_client,
+                proxy_controller=proxy_controller,
+                run_interval_seconds=WEEK,
+            ),
+            HabrSalaryParser(
+                http_client=shared_client,
+                proxy_controller=proxy_controller,
+                run_interval_seconds=MONTH,
+            ),
         ]
 
         tasks = [asyncio.create_task(p.run()) for p in parsers]

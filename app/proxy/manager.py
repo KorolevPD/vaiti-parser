@@ -12,7 +12,7 @@ class ProxyController:
     def __init__(
         self,
         provider: BaseProxyProvider | None = None,
-        cooldown_seconds: float = 0,
+        cooldown_seconds: float = 120,
     ) -> None:
         self._provider = provider or NullProxyProvider()
         self._cooldown_seconds = cooldown_seconds

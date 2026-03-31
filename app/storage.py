@@ -67,16 +67,30 @@ def get(
 
 
 def delete(
-    model: Type[T],
+    target: Union[Type[SQLModel], SQLModel, Iterable[SQLModel]],
     **filters: Any,
 ) -> int:
+    if isinstance(target, SQLModel):
+        target = [target]
+
     with get_session() as session:
-        stmt = sqlmodel.delete(model)
+        if isinstance(target, type) and issubclass(target, SQLModel):
+            stmt = sqlmodel.delete(target)
+            for field, value in filters.items():
+                stmt = stmt.where(getattr(target, field) == value)
+            result = session.exec(stmt)
+            session.commit()
+            return result.rowcount or 0
 
-        for field, value in filters.items():
-            stmt = stmt.where(getattr(model, field) == value)
+        if isinstance(target, Iterable):
+            count = 0
+            for obj in target:
+                if not isinstance(obj, SQLModel):
+                    raise ValueError("All items must be SQLModel instances")
+                session.delete(obj)
+                count += 1
 
-        result = session.exec(stmt)
-        session.commit()
+            session.commit()
+            return count
 
-        return result.rowcount
+    raise ValueError("Invalid target")
