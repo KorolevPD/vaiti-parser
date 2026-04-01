@@ -37,14 +37,15 @@ class AvitoVacanciesParser(BaseParser):
         super().__init__(*args, **kwargs)  # type: ignore
         self._config_path = BASE_DIR / config_path
         self.kafka_producer = None
-        if settings.KAFKA_BOOTSTRAP_SERVERS:
+        if settings.KAFKA_URL:
             self.kafka_producer = Producer(
-                {"bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS}
+                {"bootstrap.servers": settings.KAFKA_URL}
             )
 
     async def parse_once(self) -> None:
+        self.http_client._client.headers["Referer"] = AVITO_BASE_URL
+
         await self.fetch(AVITO_BASE_URL)
-        delete(Vacancy, source="avito")
 
         config = self.load_config()
         for search in config.all_combinations:

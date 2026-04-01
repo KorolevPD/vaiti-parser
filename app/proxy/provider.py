@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
-import json
 import logging
 from urllib.parse import quote, urlsplit, urlunsplit
 
-from curl_cffi import AsyncSession
+from mobileproxy import Client
+
+from app.core.config import settings
 
 from .models import ProxyConfig
 
@@ -55,23 +56,13 @@ class MobileProxyProvider(BaseProxyProvider):
         )
 
     async def rotate_ip(self) -> None:
-        if not self._config.rotate_url:
-            logger.warning(
-                "Proxy rotation requested but PROXY_ROTATE_URL is not set"
+        with Client(settings.PROXY_API_KEY) as client:
+            r = client.change_equipment(
+                proxy_id=client.get_my_proxy()[0].get("proxy_id"),
+                country_id=1,
+                check_after_change=True,
             )
-            return
-
-        async with AsyncSession(timeout=300) as client:
-            r = await client.get(
-                self._config.rotate_url,
-                headers={
-                    "Authorization": "Bearer e9e3f4832dff348b00b5c18130e3187e"
-                },
-            )
-            r.raise_for_status()
-
-            data = json.loads(r.text)
-            if data.get("status", "ERR") == "ERR":
-                raise ProxyRotationError(data.get("message"))
+            if r.get("status", "ERR") == "ERR":
+                raise ProxyRotationError(r.get("message"))
 
         logger.info("Proxy IP rotation completed")

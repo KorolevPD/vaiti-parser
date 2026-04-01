@@ -161,9 +161,9 @@ async def test_parse_once_fetches_aliases_and_saves_built_salaries(
 
     assert len(saved_batches) == 2
 
-    python_salaries = saved_batches[0]
-    assert len(python_salaries) == 1
-    assert python_salaries[0].title == "Python developer"  # type: ignore
-    assert python_salaries[0].specialization == "python"  # type: ignore
+    salaries = saved_batches[0]
+    assert len(salaries) == 1
+    assert salaries[0].external_title == "Python developer"  # type: ignore
+    assert salaries[0].external_specialization == "python"  # type: ignore
 
     assert saved_batches[1] == []

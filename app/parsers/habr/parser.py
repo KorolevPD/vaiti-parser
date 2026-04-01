@@ -23,9 +23,9 @@ class HabrSalaryParser(BaseParser):
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
         self.kafka_producer = None
-        if settings.KAFKA_BOOTSTRAP_SERVERS:
+        if settings.KAFKA_URL:
             self.kafka_producer = Producer(
-                {"bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS}
+                {"bootstrap.servers": settings.KAFKA_URL}
             )
 
     async def parse_once(self) -> None:
@@ -92,9 +92,9 @@ class HarbRatingParser(BaseParser):
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
         self.kafka_producer = None
-        if settings.KAFKA_BOOTSTRAP_SERVERS:
+        if settings.KAFKA_URL:
             self.kafka_producer = Producer(
-                {"bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS}
+                {"bootstrap.servers": settings.KAFKA_URL}
             )
 
     async def parse_once(self) -> None:

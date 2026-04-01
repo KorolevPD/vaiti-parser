@@ -1,7 +1,7 @@
 [project]
 name = "vaiti-parser"
 version = "0.1.0"
-description = "Парсер данных о зарплате, вакансиях и рейтинге компаний."
+description = "Скрейпер данных о зарплате, вакансиях и рейтинге компаний."
 authors = [
     {name = "Pavel Korolev", email = "pdkorolev@yandex.ru"}
 ]
@@ -19,6 +19,7 @@ dependencies = [
     "beautifulsoup4 (>=4.14.3,<5.0.0)",
     "curl-cffi (>=0.14.0,<0.15.0)",
     "confluent-kafka (>=2.13.2,<3.0.0)",
+    "mobileproxy-sdk (>=1.0.0,<2.0.0)",
 ]
 
 [dependency-groups]

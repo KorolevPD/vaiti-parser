@@ -37,7 +37,7 @@ def run_migrations_online() -> None:
     if section is None:
         section = {}
 
-    connectable = connectable = create_engine(settings.DATABASE_URL, echo=True)
+    connectable = create_engine(settings.DATABASE_URL, echo=True)
     with connectable.connect() as connection:
         context.configure(
             connection=connection,

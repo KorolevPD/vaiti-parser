@@ -41,15 +41,6 @@ class Vacancy(BaseSQLModel, table=True):
     employment_type: Optional[str] = None
     published_at: int
 
-    # grade = None
-    # specialization = None
-    # domain = None
-    # skills = None
-    # attributes = None
-    # embedding = None
-    # ai_classification = None
-    # force_enrichment = None
-
 
 class Salary(BaseSQLModel, table=True):
     __tablename__ = "salaries"

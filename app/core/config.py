@@ -8,12 +8,8 @@ class Settings(BaseSettings):
     """Глобальные настройки."""
 
     DATABASE_URL: str = Field("sqlite:///database.db")
-    KAFKA_BOOTSTRAP_SERVERS: Optional[str] = Field(None)
-
-    PROXY_URL: Optional[str] = Field(None)
-    PROXY_LOGIN: Optional[str] = Field(None)
-    PROXY_PASSWORD: Optional[str] = Field(None)
-    PROXY_ROTATE_URL: Optional[str] = Field(None)
+    KAFKA_URL: Optional[str] = Field(None)
+    PROXY_API_KEY: str = Field(...)
     PROXY_COOLDOWN_SECONDS: float = Field(120)
 
     class Config:

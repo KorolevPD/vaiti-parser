@@ -1,7 +1,7 @@
 # mypy: ignore-errors
 
 """
-Create vacancy, salary and rating tables
+Create vacancies, salaries and ratings tables
 
 Revision ID: d32bd195d834
 Revises:
@@ -22,66 +22,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.create_table(
-        "ratings",
-        sa.Column(
-            "company_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column(
-            "company_name", sqlmodel.sql.sqltypes.AutoString(), nullable=False
-        ),
-        sa.Column(
-            "source", sqlmodel.sql.sqltypes.AutoString(), nullable=False
-        ),
-        sa.Column("rating", sa.Float(), nullable=False),
-        sa.Column("reviews_count", sa.Integer(), nullable=True),
-        sa.Column("timestamp", sa.Integer(), nullable=False),
-        sa.PrimaryKeyConstraint("company_name", "source"),
-    )
-    op.create_table(
-        "salaries",
-        sa.Column(
-            "source", sqlmodel.sql.sqltypes.AutoString(), nullable=False
-        ),
-        sa.Column(
-            "external_title",
-            sqlmodel.sql.sqltypes.AutoString(),
-            nullable=False,
-        ),
-        sa.Column(
-            "external_grade",
-            sqlmodel.sql.sqltypes.AutoString(),
-            nullable=False,
-        ),
-        sa.Column(
-            "external_specialization",
-            sqlmodel.sql.sqltypes.AutoString(),
-            nullable=False,
-        ),
-        sa.Column("salary_min", sa.Integer(), nullable=False),
-        sa.Column("salary_max", sa.Integer(), nullable=False),
-        sa.Column(
-            "currency",
-            sa.Enum("RUB", "USD", "EUR", name="currency"),
-            nullable=True,
-        ),
-        sa.Column(
-            "company_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column(
-            "company_name", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column(
-            "specialization_id",
-            sqlmodel.sql.sqltypes.AutoString(),
-            nullable=True,
-        ),
-        sa.Column(
-            "grade_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column("timestamp", sa.Integer(), nullable=False),
-        sa.PrimaryKeyConstraint("source", "external_title", "external_grade"),
-    )
     op.create_table(
         "vacancies",
         sa.Column("id", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
@@ -130,6 +70,66 @@ def upgrade() -> None:
         ),
         sa.Column("published_at", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id", "source"),
+    )
+    op.create_table(
+        "salaries",
+        sa.Column(
+            "source", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+        ),
+        sa.Column(
+            "external_title",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=False,
+        ),
+        sa.Column(
+            "external_grade",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=False,
+        ),
+        sa.Column(
+            "external_specialization",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=False,
+        ),
+        sa.Column("salary_min", sa.Integer(), nullable=False),
+        sa.Column("salary_max", sa.Integer(), nullable=False),
+        sa.Column(
+            "currency",
+            sa.Enum("RUB", "USD", "EUR", name="currency"),
+            nullable=True,
+        ),
+        sa.Column(
+            "company_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "company_name", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "specialization_id",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=True,
+        ),
+        sa.Column(
+            "grade_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column("timestamp", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("source", "external_title", "external_grade"),
+    )
+    op.create_table(
+        "ratings",
+        sa.Column(
+            "company_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "company_name", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+        ),
+        sa.Column(
+            "source", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+        ),
+        sa.Column("rating", sa.Float(), nullable=False),
+        sa.Column("reviews_count", sa.Integer(), nullable=True),
+        sa.Column("timestamp", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("company_name", "source"),
     )
 
 
