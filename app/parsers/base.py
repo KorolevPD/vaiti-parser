@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import asyncio
 import logging
 
 from curl_cffi import Response
@@ -36,6 +35,7 @@ class BaseParser(ABC):
         raise NotImplementedError
 
     async def fetch(self, url: str, **kwargs: object) -> Response:
+        logger.debug(f"Fetch '{url}' url.")
         return await self.http_client.get(
             url,
             delay_range=self.request_delay_range,
@@ -47,34 +47,3 @@ class BaseParser(ABC):
             raise ProxyRefreshRequired(reason)
 
         await self.proxy_controller.rotate_proxy()
-
-    async def run(self) -> None:
-        backoff = self.failure_backoff_seconds
-        while True:
-            try:
-                await self.parse_once()
-                backoff = self.failure_backoff_seconds
-                await asyncio.sleep(self.run_interval_seconds)
-            except ProxyRefreshRequired as e:
-                logger.warning(
-                    "Refreshing proxy after parser signal from '%s': %s",
-                    self.parser_name,
-                    e,
-                )
-                if self.proxy_controller:
-                    await self.request_proxy_refresh(str(e))
-                else:
-                    logger.warning(
-                        "Proxy refresh requested by '%s', but proxy is not "
-                        "configured",
-                        self.parser_name,
-                    )
-                await asyncio.sleep(backoff)
-            except Exception as e:
-                logger.exception(
-                    "Parser '%s' failed: '%s'",
-                    self.parser_name,
-                    e,
-                )
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, 300)

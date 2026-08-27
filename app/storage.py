@@ -27,6 +27,7 @@ def save(objs: Union[SQLModel, Iterable[SQLModel]]) -> None:
             mapper = inspect(obj.__class__)
             if mapper is None:
                 continue
+            columns = {col.key for col in mapper.columns}
             pk_fields = mapper.primary_key
 
             pk_values = {col.name: getattr(obj, col.name) for col in pk_fields}
@@ -35,12 +36,13 @@ def save(objs: Union[SQLModel, Iterable[SQLModel]]) -> None:
 
             if existing:
                 for field, value in obj.model_dump(exclude_unset=True).items():
-                    setattr(existing, field, value)
+                    if field in columns:
+                        setattr(existing, field, value)
                 session.add(existing)
-                logger.info(f"Updated: {type(obj).__name__} {pk_values}")
+                logger.debug(f"Updated: {type(obj).__name__} {pk_values}")
             else:
                 session.add(obj)
-                logger.info(f"Added: {type(obj).__name__} {pk_values}")
+                logger.debug(f"Added: {type(obj).__name__} {pk_values}")
 
         session.commit()
 

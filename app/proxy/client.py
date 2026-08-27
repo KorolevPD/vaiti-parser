@@ -2,6 +2,7 @@ import asyncio
 import logging
 from random import uniform
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from curl_cffi import AsyncSession, Response
 from curl_cffi.requests.exceptions import RequestException
@@ -36,6 +37,10 @@ class SharedHttpClient:
         delay_range: tuple[float, float] | None = None,
         **kwargs: Any,
     ) -> Response:
+        parsed_url = urlparse(url)
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+        self._client.headers["Referer"] = base_url
+
         attempt = 0
         while True:
             attempt += 1

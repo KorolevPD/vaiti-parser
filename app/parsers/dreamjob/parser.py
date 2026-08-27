@@ -3,11 +3,10 @@ from random import shuffle
 from typing import List, Optional
 
 from bs4 import BeautifulSoup
-from confluent_kafka import Producer
 
-from app.core.config import settings
 from app.models import Rating
 from app.parsers import BaseParser
+from app.services.kafka_producer import KafkaProducer
 from app.storage import save
 
 from .schemas import Company, CompanyResponse
@@ -27,11 +26,7 @@ class DreamjobRatingParser(BaseParser):
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore
-        self.kafka_producer = None
-        if settings.KAFKA_URL:
-            self.kafka_producer = Producer(
-                {"bootstrap.servers": settings.KAFKA_URL}
-            )
+        self.kafka_producer = KafkaProducer("rating.discovered")
 
     async def parse_once(self) -> None:
         await self.fetch(DREAMJOB_BASE_URL)
@@ -40,11 +35,10 @@ class DreamjobRatingParser(BaseParser):
         for company in companies:
             rating = await self.search(company)
             if rating:
-                self.send_to_kafka(rating)
+                self.kafka_producer.send(rating)
                 save(rating)
 
-        if self.kafka_producer:
-            self.kafka_producer.flush()
+        self.kafka_producer.flush()
 
     async def get_companies(self) -> List[Company]:
         page = 1
@@ -55,10 +49,10 @@ class DreamjobRatingParser(BaseParser):
                 f"{COMPANY_SERVICE_URL}/internal/companies/dictionary",
                 params={"page": page, "size": 100},
             )
-            data = CompanyResponse.model_validate(r.text)
+            data = CompanyResponse.model_validate(r.json())  # type: ignore
 
             companies.extend(data.content)
-            max_page = data.totalPages
+            max_page = data.total_pages
             page += 1
 
         return companies
@@ -107,11 +101,3 @@ class DreamjobRatingParser(BaseParser):
             rating=rating,
             reviews_count=int(reviews_element.get_text(strip=True)),
         )
-
-    def send_to_kafka(self, rating: Rating) -> None:
-        if self.kafka_producer:
-            self.kafka_producer.produce(
-                "rating.discovered",
-                key=f"{rating.source}:{rating.company_name}",
-                value=rating.model_dump_json(),
-            )

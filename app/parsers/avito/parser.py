@@ -5,14 +5,13 @@ from pathlib import Path
 from random import shuffle
 
 from bs4 import BeautifulSoup
-from confluent_kafka import Producer
 from curl_cffi import Response
 from curl_cffi.requests.exceptions import HTTPError
 import yaml
 
-from app.core.config import settings
 from app.models import Vacancy
 from app.parsers import BaseParser, ProxyRefreshRequired
+from app.services.kafka_producer import KafkaProducer
 from app.storage import delete, get, save
 from app.utils import normalize
 
@@ -34,17 +33,14 @@ class AvitoVacanciesParser(BaseParser):
         config_path: str = "config.yaml",
         **kwargs: object,
     ) -> None:
-        super().__init__(*args, **kwargs)  # type: ignore
+        super().__init__(
+            request_delay_range=(2.0, 5.0), *args, **kwargs  # type: ignore
+        )
         self._config_path = BASE_DIR / config_path
-        self.kafka_producer = None
-        if settings.KAFKA_URL:
-            self.kafka_producer = Producer(
-                {"bootstrap.servers": settings.KAFKA_URL}
-            )
+        self.kafka_producer_discovered = KafkaProducer("vacancy.discovered")
+        self.kafka_producer_archived = KafkaProducer("vacancy.archived")
 
     async def parse_once(self) -> None:
-        self.http_client._client.headers["Referer"] = AVITO_BASE_URL
-
         await self.fetch(AVITO_BASE_URL)
 
         config = self.load_config()
@@ -68,7 +64,7 @@ class AvitoVacanciesParser(BaseParser):
 
         while True:
             params["p"] = page
-            logger.info("Avito search '%s' page %s started", keyword, page)
+            logger.debug("Avito search '%s' page %s started", keyword, page)
 
             response = await self.fetch(AVITO_API_URL, params=params)
             vacancies = self.extract_catalog_items(
@@ -84,19 +80,19 @@ class AvitoVacanciesParser(BaseParser):
             page += 1
 
     async def complete_missing_details(self) -> None:
-        vacancies = list(get(Vacancy))
+        vacancies = list(get(Vacancy, source="avito"))
         shuffle(vacancies)
         for vacancy in vacancies:
             updated = await self.complete_vacancy(vacancy)
             if updated:
-                self.send_to_kafka(updated)
+                self.kafka_producer_discovered.send(updated)
                 save(updated)
             else:
-                self.delete_from_kafka(vacancy)
+                self.kafka_producer_archived.send(vacancy)
                 delete(vacancy)
 
-        if self.kafka_producer:
-            self.kafka_producer.flush()
+        self.kafka_producer_discovered.flush()
+        self.kafka_producer_archived.flush()
 
     def build_search_params(
         self,
@@ -249,7 +245,7 @@ class AvitoVacanciesParser(BaseParser):
             r = await self.fetch(url)
         except HTTPError as e:
             if e.response.status_code == 404:
-                logger.info(
+                logger.debug(
                     "Vacancy not found anymore: %s", vacancy.source_url
                 )
                 return None
@@ -263,9 +259,15 @@ class AvitoVacanciesParser(BaseParser):
                 title = item.get("title")
                 description = item.get("description")
                 if "Формат работы" in title:
-                    vacancy.work_format = description
+                    work_formats = None
+                    if isinstance(description, str):
+                        work_formats = description.split(",")
+                    vacancy.work_formats = work_formats
                 if "Занятость" in title:
-                    vacancy.employment_type = description
+                    employment_types = None
+                    if isinstance(description, str):
+                        employment_types = description.split(",")
+                    vacancy.employment_types = employment_types
 
         description = (
             data.get("buyerItem", {}).get("item", {}).get("description")
@@ -278,19 +280,3 @@ class AvitoVacanciesParser(BaseParser):
         vacancy.source_url = vacancy.source_url.split("?")[0]
 
         return vacancy
-
-    def send_to_kafka(self, v: Vacancy) -> None:
-        if self.kafka_producer:
-            self.kafka_producer.produce(
-                "vacancy.discovered",
-                key=f"{v.source}:{v.id}",
-                value=v.model_dump_json(),
-            )
-
-    def delete_from_kafka(self, v: Vacancy) -> None:
-        if self.kafka_producer:
-            self.kafka_producer.produce(
-                "vacancy.archived",
-                key=f"{v.source}:{v.id}",
-                value=json.dumps({"source": v.source, "externalId": v.id}),
-            )

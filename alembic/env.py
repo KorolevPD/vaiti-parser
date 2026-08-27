@@ -1,19 +1,26 @@
-from logging.config import fileConfig
+from typing import Optional
 
 from alembic import context
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.schema import SchemaItem
 from sqlmodel import SQLModel
 
 from app.core.config import settings
 import app.models  # noqa: F401
 
-load_dotenv()
-
-config = context.config
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
 target_metadata = SQLModel.metadata
+
+
+def include_object(
+    object: SchemaItem,
+    name: Optional[str],
+    type_: str,
+    reflected: bool,
+    compare_to: Optional[SchemaItem],
+) -> bool:
+    if type_ == "table" and name == "apscheduler_jobs":
+        return False
+    return True
 
 
 def run_migrations_offline() -> None:
@@ -24,6 +31,9 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_schemas=True,
+        version_table_schema=settings.database_schema,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -33,16 +43,14 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Запуск миграций в online-режиме."""
 
-    section = config.get_section(config.config_ini_section)
-    if section is None:
-        section = {}
-
     connectable = create_engine(settings.DATABASE_URL, echo=True)
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             include_schemas=True,
+            version_table_schema=settings.database_schema,
+            include_object=include_object,
         )
 
         with context.begin_transaction():

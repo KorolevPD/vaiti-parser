@@ -1,113 +1,81 @@
 import asyncio
+from datetime import datetime as dt
 import logging
-import sys
+from typing import List, Tuple
+from zoneinfo import ZoneInfo
 
-from curl_cffi.requests import AsyncSession
-from mobileproxy import Client
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from app.core.config import settings
+from app.core.logging import setup_logging
 from app.parsers import BaseParser
 from app.parsers.avito import AvitoVacanciesParser
 from app.parsers.dreamjob import DreamjobRatingParser
-from app.parsers.habr import HabrSalaryParser, HarbRatingParser
-from app.proxy.client import SharedHttpClient
-from app.proxy.manager import ProxyController
-from app.proxy.models import ProxyConfig
-from app.proxy.provider import MobileProxyProvider
+from app.parsers.habr import (
+    HabrSalaryParser,
+    HabrVacancyParser,
+    HarbRatingParser,
+)
+from app.runtime.state import init_proxy_controller
+from app.scheduler.jobs import run_parser
 
-DAY = 86400
-WEEK = DAY * 7
-MONTH = DAY * 30
+logger = logging.getLogger(__name__)
+
+TIMEZONE = "Europe/Moscow"
 
 
 async def main() -> None:
     setup_logging()
-    proxy_controller = None
-    proxy: str | None = None
+    init_proxy_controller()
 
-    with Client(settings.PROXY_API_KEY) as client:
-        proxies = client.get_my_proxy()
+    per_day = CronTrigger(hour=2)
+    per_week = CronTrigger(day_of_week="mon", hour=2)
+    per_month = CronTrigger(day=1, hour=2)
 
-    if proxies:
-        login = proxies[0].get("proxy_login", "")
-        password = proxies[0].get("proxy_pass", "")
-        hostname = proxies[0].get("proxy_independent_http_hostname")
-        port = proxies[0].get("proxy_independent_port")
-        proxy_config = ProxyConfig(
-            url=f"http://{login}:{password}@{hostname}:{port}",
-            cooldown_seconds=settings.PROXY_COOLDOWN_SECONDS,
-        )
-        proxy_controller = ProxyController(
-            provider=MobileProxyProvider(proxy_config),
-            cooldown_seconds=proxy_config.cooldown_seconds,
-        )
-        proxy = proxy_controller.proxy_url
+    parsers: List[Tuple[type[BaseParser], CronTrigger]] = [
+        (AvitoVacanciesParser, per_day),
+        (HabrVacancyParser, per_day),
+        (DreamjobRatingParser, per_week),
+        (HarbRatingParser, per_week),
+        (HabrSalaryParser, per_month),
+    ]
 
-    async with AsyncSession(
-        proxy=proxy,
-        impersonate="chrome",
-        allow_redirects=True,
-        http_version="v2",
-        timeout=60,
-        max_clients=1,
-    ) as raw_client:
-        shared_client = SharedHttpClient(
-            raw_client,
-            proxy_controller=proxy_controller,
-        )
-
-        parsers: list[BaseParser] = [
-            AvitoVacanciesParser(
-                http_client=shared_client,
-                proxy_controller=proxy_controller,
-                run_interval_seconds=DAY,
-                request_delay_range=(2.0, 5.0),
-            ),
-            DreamjobRatingParser(
-                http_client=shared_client,
-                proxy_controller=proxy_controller,
-                run_interval_seconds=WEEK,
-            ),
-            HarbRatingParser(
-                http_client=shared_client,
-                proxy_controller=proxy_controller,
-                run_interval_seconds=WEEK,
-            ),
-            HabrSalaryParser(
-                http_client=shared_client,
-                proxy_controller=proxy_controller,
-                run_interval_seconds=MONTH,
-            ),
-        ]
-
-        tasks = [asyncio.create_task(p.run()) for p in parsers]
-
-        await asyncio.gather(*tasks)
-
-
-class Formatter(logging.Formatter):
-    LEVEL_PREFIX = {
-        logging.DEBUG: "DEBUG",
-        logging.INFO: "INFO",
-        logging.WARNING: "WARNING",
-        logging.ERROR: "ERROR",
-        logging.CRITICAL: "CRITICAL",
-    }
-
-    def format(self, record: logging.LogRecord) -> str:
-        levelprefix = self.LEVEL_PREFIX.get(record.levelno, "LVL").ljust(8)
-        timestamp = self.formatTime(record, "%d.%m.%Y %H:%M:%S")
-        message = record.getMessage()
-        return f"{timestamp} | {levelprefix}{message}"
-
-
-def setup_logging() -> None:
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(Formatter())
-    logging.basicConfig(
-        level=logging.INFO,
-        handlers=[handler],
+    scheduler = AsyncIOScheduler(
+        jobstores={
+            "default": SQLAlchemyJobStore(
+                url=settings.DATABASE_URL,
+                tableschema=settings.database_schema,
+            )
+        },
+        timezone=TIMEZONE,
     )
+    scheduler.start()
+
+    for parser, trigger in parsers:
+        job_id = parser.__name__
+        if not scheduler.get_job(job_id):
+            scheduler.add_job(
+                run_parser,
+                trigger=trigger,
+                args=[parser],
+                id=job_id,
+                name=parser.parser_name,
+                coalesce=True,
+                max_instances=1,
+                replace_existing=True,
+                next_run_time=dt.now(tz=ZoneInfo(TIMEZONE)),
+                misfire_grace_time=None,
+            )
+
+    try:
+        await asyncio.Event().wait()
+    except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
+        logger.info("Shutting down scheduler...")
+    finally:
+        scheduler.shutdown(wait=True)
+        logger.info("Scheduler shutdown completed.")
 
 
 if __name__ == "__main__":
